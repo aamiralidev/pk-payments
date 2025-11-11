@@ -29,7 +29,6 @@ export async function initHostedCheckout(
   } else {
     initUrl = "/api/payment/jazzcash/hosted/init";
   }
-
   const res = await fetch(initUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -40,8 +39,9 @@ export async function initHostedCheckout(
     const text = await res.text().catch(() => "");
     throw new Error(`JazzCash init failed (${res.status}): ${text}`);
   }
-
-  const data = (await res.json()) as JazzCashInitResponse;
+  const gson = await res.json()
+  console.log("Res: ", gson)
+  const data = gson as JazzCashInitResponse;
 
   if (!data?.endpoint || !data?.fields) {
     throw new Error("Invalid JazzCash init response: missing endpoint/fields");

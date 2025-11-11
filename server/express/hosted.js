@@ -16,6 +16,7 @@ const cfg = {
 };
 
 function makeSecureHash(params, integritySalt) {
+
   if (!integritySalt) throw new Error("Integrity salt missing");
 
   // include only pp_* fields EXCLUDING pp_SecureHash and empty values
@@ -28,14 +29,13 @@ function makeSecureHash(params, integritySalt) {
   // take VALUES only, joined by '&'
   const values = sorted.map(([, v]) => String(v));
   const toSign = [integritySalt, ...values].join("&");
-
+  console.log("To sign is: ", toSign)
   return crypto.createHmac("sha256", integritySalt).update(toSign, "utf8").digest("hex");
 }
 
 
 // Format YYYYMMDDHHMMSS in PKT (server time is fine as long as consistent)
-function nowStamp() {
-  const d = new Date();
+function formatDateTime(d) {
   const pad = n => String(n).padStart(2, "0");
   return (
     d.getFullYear().toString() +
@@ -47,24 +47,36 @@ function nowStamp() {
   );
 }
 
+const pkrToPaisa = (amountDecimal) => {
+  const val = Math.round(Number(amountDecimal) * 100);
+  if (Number.isNaN(val) || val <= 0) throw new Error('Invalid amount');
+  return String(val);
+};
+
+export function generateTxnRefNo() {
+  const base = Date.now().toString().slice(-13); // last 13 digits of epoch ms
+  const random3 = Math.floor(100 + Math.random() * 900); // 3 random digits
+  return `T${base.slice(0, 13 - 3)}${random3}`.slice(0, 17); // ensure 17 chars
+}
+
+
 // INIT endpoint: returns fields + endpoint URL to the client
 router.post("/api/payment/jazzcash/hosted/init", async (req, res) => {
   const { amountPKR, orderId, description } = req.body;
+  const now = formatDateTime(new Date())
   // JazzCash expects amount in paisa
-  const amountPaisa = Math.round(Number(amountPKR) * 100);
-
   const fields = {
     pp_Version: "1.1",
     pp_TxnType: "MWALLET",
     pp_Language: "EN",
     pp_MerchantID: cfg.merchantId,
     pp_Password: cfg.password,
-    pp_TxnRefNo: orderId,            // unique per order e.g. "ORD-12345"
-    pp_Amount: String(amountPaisa),  // e.g. 2500.00 PKR => "250000"
+    pp_TxnRefNo: generateTxnRefNo(),
+    pp_Amount: pkrToPaisa(amountPKR),
     pp_TxnCurrency: "PKR",
-    pp_TxnDateTime: nowStamp(),
-    pp_BillReference: orderId,
-    pp_Description: description || "Order payment",
+    pp_TxnDateTime: now,
+    pp_BillReference: 'billRef',
+    pp_Description: "Description of transaction",
     pp_ReturnURL: cfg.returnUrl,
     pp_SecureHashType: "SHA256",
   };
@@ -112,6 +124,12 @@ router.post("/api/payment/jazzcash/hosted/return", express.urlencoded({ extended
         Response Code: <strong>${resp.pp_ResponseCode || "N/A"}</strong><br/>
         Description: <strong>${resp.pp_ResponseMessage || "Unknown error"}</strong><br/>
         Please try again or contact support.
+        <details style="margin-top:10px;">
+            <summary><strong>Debug: Full Response Body</strong></summary>
+            <pre style="background:#f4f4f4;padding:10px;border-radius:6px;white-space:pre-wrap;font-size:13px;">
+        ${JSON.stringify(resp, null, 2)}
+            </pre>
+          </details>
       `;
     }
 
