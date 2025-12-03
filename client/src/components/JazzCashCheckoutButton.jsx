@@ -3,7 +3,7 @@ import React from "react";
 import { payWithJazzcashHosted } from "../lib/payment/jazzcash/hosted";
 
 
-export default function CheckoutButton({ amountPKR, orderId }) {
+export default function JazzCashCheckoutButton({ amountPKR, orderId }) {
   const onPay = async () => {
     await payWithJazzcashHosted(
       { amountPKR, orderId, description: `Order #${orderId}` },
